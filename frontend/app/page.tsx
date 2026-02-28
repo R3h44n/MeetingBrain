@@ -5,7 +5,7 @@ import { useAudioStream } from '@/hooks/useAudioStream';
 export default function Home() {
   // We'll connect to a local backend for now
   const { isRecording, startRecording, stopRecording, transcript, actionItems } = 
-    useAudioStream('ws://localhost:8080/ws/meeting');
+    useAudioStream('ws://localhost:8000/ws/meeting');
 
   return (
     <main className="min-h-screen bg-gray-50 p-8 text-gray-900">

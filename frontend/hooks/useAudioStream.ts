@@ -14,12 +14,19 @@ export const useAudioStream = (websocketUrl: string) => {
       socket.current = new WebSocket(websocketUrl);
       
       // 2. Listen for processed data coming BACK from the AI
+      // Inside hooks/useAudioStream.ts
       socket.current.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'transcript') {
-          setTranscript((prev) => prev + ' ' + data.text);
-        } else if (data.type === 'action_item') {
-          setActionItems((prev) => [...prev, data.item]);
+        try {
+          // 1. First, try to read it as JSON (For Block 3: Action Items)
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'action_item') {
+            setActionItems((prev) => [...prev, data.item]);
+          }
+        } catch (error) {
+          // 2. If it is NOT JSON, it must be the raw transcript text from Person A!
+          // Voxtral sends chunks like "I ", "will ", "do ", "that."
+          setTranscript((prev) => prev + event.data);
         }
       };
 
