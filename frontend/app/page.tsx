@@ -1,9 +1,10 @@
 'use client';
 
 import { useAudioStream } from '@/hooks/useAudioStream';
+import ActionItemList from '@/components/ActionItemList';
 
 export default function Home() {
-  // We'll connect to a local backend for now
+  // Connect to the local FastAPI backend
   const { isRecording, startRecording, stopRecording, transcript, actionItems } = 
     useAudioStream('ws://localhost:8000/ws');
 
@@ -52,18 +53,19 @@ export default function Home() {
 
         {/* Right Column: AI Action Items */}
         <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
-          <h2 className="text-xl font-semibold border-b pb-4 mb-4 text-indigo-600">Action Items</h2>
-          <div className="flex-1 overflow-y-auto space-y-4">
-            {actionItems.length === 0 ? (
-              <p className="text-gray-400 italic text-sm">Listening for tasks...</p>
-            ) : (
-              actionItems.map((item, idx) => (
-                <div key={idx} className="p-4 bg-indigo-50 rounded-lg border border-indigo-100">
-                  <h3 className="font-bold text-indigo-900">{item.title}</h3>
-                  <p className="text-sm text-indigo-700 mt-1">{item.assignee} - {item.deadline}</p>
-                </div>
-              ))
+          <div className="flex items-center gap-2 border-b pb-4 mb-4">
+            <h2 className="text-xl font-semibold text-indigo-600">Action Items</h2>
+            {/* Dynamic Badge showing the number of tasks extracted */}
+            {actionItems.length > 0 && (
+              <span className="bg-indigo-100 text-indigo-700 text-xs py-1 px-2 rounded-full font-bold">
+                {actionItems.length}
+              </span>
             )}
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            {/* Dropping in your new dedicated component */}
+            <ActionItemList items={actionItems} />
           </div>
         </section>
       </div>
