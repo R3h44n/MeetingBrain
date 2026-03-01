@@ -17,14 +17,27 @@ export const useAudioStream = (websocketUrl: string) => {
       // Inside hooks/useAudioStream.ts
       socket.current.onmessage = (event) => {
         try {
+          // We now expect EVERYTHING from the backend to be JSON
           const data = JSON.parse(event.data);
-          if (data.type === 'action_item') {
-            setActionItems((prev) => [...prev, data.item]);
+
+          if (data.type === 'transcript') {
+            // 1. Update the live text on the screen
+            setTranscript(data.text);
+            
+          } else if (data.type === 'action_items' && Array.isArray(data.items)) {
+            // 2. Map Person A's backend schema to match your frontend UI schema
+            const formattedItems = data.items.map((item: any) => ({
+              title: item.task || "Untitled Task",
+              assignee: item.assignee || "Unassigned",
+              deadline: item.due || "No date"
+            }));
+            
+            // 3. Replace the array completely (since the backend analyzes the whole meeting every time)
+            setActionItems(formattedItems);
           }
+          
         } catch (error) {
-          // CHANGE THIS LINE: 
-          // Instead of appending (prev + event.data), we just replace the whole text!
-          setTranscript(event.data); 
+          console.error("Error parsing WebSocket message:", error);
         }
       };
 
