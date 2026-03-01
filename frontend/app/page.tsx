@@ -2,8 +2,18 @@
 
 import { useAudioStream } from '@/hooks/useAudioStream';
 import ActionItemList from '@/components/ActionItemList';
+import MeetingChat from '@/components/MeetingChat';
+import { useState } from 'react';
 
 export default function Home() {
+  const [isChatThinking, setIsChatThinking] = useState(false);
+
+  const handleSendMessage = async (message: string) => {
+    setIsChatThinking(true);
+    // We will connect this to Person A's new API route later!
+    setTimeout(() => setIsChatThinking(false), 2000); // Fake delay for now
+  };
+
   // Connect to the local FastAPI backend
   const { isRecording, startRecording, stopRecording, transcript, actionItems } = 
     useAudioStream('ws://localhost:8000/ws');
@@ -43,12 +53,25 @@ export default function Home() {
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 h-[80vh]">
-        {/* Left Column: Live Transcript */}
-        <section className="col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col">
-          <h2 className="text-xl font-semibold border-b pb-4 mb-4">Live Transcript</h2>
-          <div className="flex-1 overflow-y-auto font-mono text-sm text-gray-700 whitespace-pre-wrap">
-            {transcript || "Waiting for conversation to start..."}
+        {/* Left Column: Live Transcript & Chat (Stacked) */}
+        <section className="col-span-2 flex flex-col gap-6 h-full">
+          
+          {/* Top Half: The Transcript */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col flex-1 min-h-[40vh]">
+            <h2 className="text-xl font-semibold border-b pb-4 mb-4">Live Transcript</h2>
+            <div className="flex-1 overflow-y-auto font-mono text-sm text-gray-700 whitespace-pre-wrap">
+              {transcript || "Waiting for conversation to start..."}
+            </div>
           </div>
+
+          {/* Bottom Half: The Chat Interface */}
+          <div className="flex-1 min-h-[40vh]">
+            <MeetingChat 
+              onSendMessage={handleSendMessage} 
+              isThinking={isChatThinking} 
+            />
+          </div>
+
         </section>
 
         {/* Right Column: AI Action Items */}
