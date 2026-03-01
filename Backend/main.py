@@ -19,6 +19,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------
+# PROMPTS
+# ---------------------------------------------------------
 systemPrompt = """You are a precise action item extractor for technical and business meetings.
 
 You must catch action items even when phrased with domain-specific jargon:
@@ -34,13 +37,20 @@ Rules:
 
 Schema: [{"task": "...", "assignee": "...", "due": "..."}]"""
 
-# Back to just one client, because we are using native async now!
-mistral_client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
+QA_SYSTEM_PROMPT = """You are an intelligent meeting assistant. 
+Answer the user's question using ONLY the provided meeting transcript. 
+If the answer is not contained in the transcript, state clearly that it has not been discussed yet. 
+Do not hallucinate or use outside knowledge."""
 
+# ---------------------------------------------------------
+# CLIENT & CONFIG
+# ---------------------------------------------------------
+mistral_client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
 DEBOUNCE_SECONDS = 2.0  
 
-
-# 1. Changed to an async function using complete_async
+# ---------------------------------------------------------
+# BLOCK 3: ACTION ITEM EXTRACTION (Ministral 8B)
+# ---------------------------------------------------------
 async def run_extraction(full_transcript: str) -> list:
     response = await mistral_client.chat.complete_async(
         model="ministral-8b-latest",
@@ -61,6 +71,9 @@ async def run_extraction(full_transcript: str) -> list:
             return v
     return []
 
+# ---------------------------------------------------------
+# BLOCK 4: CHAT WITH MEETING (Mistral Large 3)
+# ---------------------------------------------------------
 class AskRequest(BaseModel):
     transcript: str
     question: str
@@ -71,10 +84,6 @@ class AskResponse(BaseModel):
 
 @app.post("/ask", response_model=AskResponse)
 async def ask_about_transcript(body: AskRequest):
-    """
-    Takes a full meeting transcript + a user question.
-    Returns a comprehensive, highly reasoned answer from Mistral Large 3.
-    """
     if not body.transcript.strip():
         raise HTTPException(status_code=400, detail="Transcript cannot be empty.")
     if not body.question.strip():
@@ -90,12 +99,12 @@ async def ask_about_transcript(body: AskRequest):
 
     try:
         response = await mistral_client.chat.complete_async(
-            model="mistral-large-latest",   # Mistral Large 3
+            model="mistral-large-latest",
             messages=[
                 {"role": "system", "content": QA_SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            temperature=0.3,   # low-ish for factual grounding, slight warmth for reasoning
+            temperature=0.3, 
             max_tokens=2048,
         )
     except Exception as e:
@@ -104,6 +113,9 @@ async def ask_about_transcript(body: AskRequest):
     answer = response.choices[0].message.content.strip()
     return AskResponse(answer=answer, model="mistral-large-latest")
 
+# ---------------------------------------------------------
+# BLOCK 1 & 2: REAL-TIME AUDIO WEBSOCKET (Voxtral Mini)
+# ---------------------------------------------------------
 @app.websocket("/ws")
 async def websocket_endpoint(client_ws: WebSocket):
     await client_ws.accept()
@@ -111,16 +123,26 @@ async def websocket_endpoint(client_ws: WebSocket):
     
     session_audio = bytearray()
     latest_transcript = ""  
+    last_extracted_transcript = ""  # The memory check variable
     is_transcribing = False
     debounce_handle = None  
 
     async def trigger_extraction():
-        nonlocal latest_transcript
+        nonlocal latest_transcript, last_extracted_transcript
+        
+        # Guardrail 1: Don't extract if the transcript is empty
         if not latest_transcript.strip():
             return
+            
+        # Guardrail 2: Don't extract if nothing has changed!
+        if latest_transcript == last_extracted_transcript:
+            return
+            
+        # Update memory so we don't repeat this exact string
+        last_extracted_transcript = latest_transcript
+        
         print(f"\n--- Debounce fired. Extracting from {len(latest_transcript)} chars ---")
         try:
-            # 2. Native await instead of to_thread
             items = await run_extraction(latest_transcript)
             print(json.dumps(items, indent=2))
             await client_ws.send_text(json.dumps({
@@ -146,14 +168,14 @@ async def websocket_endpoint(client_ws: WebSocket):
             audio_bytes = await client_ws.receive_bytes()
             session_audio.extend(audio_bytes)
             
-            if not is_transcribing and len(session_audio) > 0:
+            # The 15KB threshold to prevent the 3310 decoding error
+            if not is_transcribing and len(session_audio) > 15000:
                 is_transcribing = True
                 audio_snapshot = bytes(session_audio)
                 
                 async def process_and_send():
                     nonlocal is_transcribing, latest_transcript
                     try:
-                        # 3. Native async audio transcription! No threads needed.
                         response = await mistral_client.audio.transcriptions.complete_async(
                             model="voxtral-mini-latest", 
                             file={

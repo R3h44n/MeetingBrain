@@ -12,27 +12,32 @@ export default function Home() {
     setIsChatThinking(true);
     
     try {
-      // Send the question to Person A's new FastAPI endpoint
-      const response = await fetch('http://localhost:8000/chat', {
+      // 1. Pointing to the new /ask endpoint
+      const response = await fetch('http://localhost:8000/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question: message }),
+        // 2. Packaging both the question AND the live transcript
+        body: JSON.stringify({ 
+          transcript: transcript, 
+          question: message 
+        }),
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
+      // 3. Catching the response and extracting the answer string
       const data = await response.json();
-      return data.answer; // Return the string back to the Chat Component
+      return data.answer; 
 
     } catch (error) {
       console.error("Chat Error:", error);
-      return "Sorry, I couldn't reach the backend to answer that.";
+      return "Sorry, I couldn't reach the backend to answer that. Make sure the server is running!";
     } finally {
-      setIsChatThinking(false); // Turn off the pulsing animation
+      setIsChatThinking(false);
     }
   };
 
