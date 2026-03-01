@@ -7,7 +7,7 @@ export interface ChatMessage {
 }
 
 interface MeetingChatProps {
-  onSendMessage: (message: string) => Promise<void>;
+  onSendMessage: (message: string) => Promise<string | void>;
   isThinking: boolean;
 }
 
@@ -30,13 +30,16 @@ export default function MeetingChat({ onSendMessage, isThinking }: MeetingChatPr
     const userMsg = input.trim();
     setInput('');
     
-    // Add user message to UI immediately
+    // 1. Add user message to UI immediately
     setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
     
-    // Trigger the backend call
-    await onSendMessage(userMsg);
+    // 2. Trigger the backend call and wait for the AI's answer
+    const aiResponse = await onSendMessage(userMsg);
     
-    // Note: In step 2, we will add the AI's response to the messages array!
+    // 3. If we got an answer, add the AI's bubble to the screen!
+    if (aiResponse) {
+      setMessages(prev => [...prev, { role: 'ai', content: aiResponse }]);
+    }
   };
 
   return (

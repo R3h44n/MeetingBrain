@@ -10,8 +10,30 @@ export default function Home() {
 
   const handleSendMessage = async (message: string) => {
     setIsChatThinking(true);
-    // We will connect this to Person A's new API route later!
-    setTimeout(() => setIsChatThinking(false), 2000); // Fake delay for now
+    
+    try {
+      // Send the question to Person A's new FastAPI endpoint
+      const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: message }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+
+      const data = await response.json();
+      return data.answer; // Return the string back to the Chat Component
+
+    } catch (error) {
+      console.error("Chat Error:", error);
+      return "Sorry, I couldn't reach the backend to answer that.";
+    } finally {
+      setIsChatThinking(false); // Turn off the pulsing animation
+    }
   };
 
   // Connect to the local FastAPI backend
