@@ -1,9 +1,10 @@
 import os
 import json
 import asyncio
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from mistralai import Mistral
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -38,6 +39,7 @@ mistral_client = Mistral(api_key=os.getenv("MISTRAL_API_KEY"))
 
 DEBOUNCE_SECONDS = 2.0  
 
+
 # 1. Changed to an async function using complete_async
 async def run_extraction(full_transcript: str) -> list:
     response = await mistral_client.chat.complete_async(
@@ -58,6 +60,49 @@ async def run_extraction(full_transcript: str) -> list:
         if isinstance(v, list):
             return v
     return []
+
+class AskRequest(BaseModel):
+    transcript: str
+    question: str
+
+class AskResponse(BaseModel):
+    answer: str
+    model: str
+
+@app.post("/ask", response_model=AskResponse)
+async def ask_about_transcript(body: AskRequest):
+    """
+    Takes a full meeting transcript + a user question.
+    Returns a comprehensive, highly reasoned answer from Mistral Large 3.
+    """
+    if not body.transcript.strip():
+        raise HTTPException(status_code=400, detail="Transcript cannot be empty.")
+    if not body.question.strip():
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    user_message = (
+        f"MEETING TRANSCRIPT:\n"
+        f"{'─' * 60}\n"
+        f"{body.transcript.strip()}\n"
+        f"{'─' * 60}\n\n"
+        f"QUESTION: {body.question.strip()}"
+    )
+
+    try:
+        response = await mistral_client.chat.complete_async(
+            model="mistral-large-latest",   # Mistral Large 3
+            messages=[
+                {"role": "system", "content": QA_SYSTEM_PROMPT},
+                {"role": "user", "content": user_message},
+            ],
+            temperature=0.3,   # low-ish for factual grounding, slight warmth for reasoning
+            max_tokens=2048,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Mistral API error: {str(e)}")
+
+    answer = response.choices[0].message.content.strip()
+    return AskResponse(answer=answer, model="mistral-large-latest")
 
 @app.websocket("/ws")
 async def websocket_endpoint(client_ws: WebSocket):
